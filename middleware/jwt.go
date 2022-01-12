@@ -12,8 +12,17 @@ import (
 	"github.com/WeixinCloud/wxcloudrun-wxcomponent/comm/utils"
 )
 
+var ipWhiteList = map[string]bool{
+	"asa":true,
+}
 // JWTMiddleWare 中间件
 func JWTMiddleWare(c *gin.Context) {
+	reqIP :=c.ClientIP()
+	if _,ok:=ipWhiteList[reqIP];ok{
+		log.Debugf("ip-whitelist[%s]", reqIP)
+		c.Next()
+		return
+	}
 	code := errno.OK
 	strToken := c.Request.Header.Get("Authorization")
 	token := utils.GetToken(strToken)
