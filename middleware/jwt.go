@@ -13,13 +13,15 @@ import (
 )
 
 var ipWhiteList = map[string]bool{
-	"asa":true,
+	"172.81.205.253": true,
 }
+
 // JWTMiddleWare 中间件
 func JWTMiddleWare(c *gin.Context) {
-	reqIP :=c.ClientIP()
-	if _,ok:=ipWhiteList[reqIP];ok{
-		log.Debugf("ip-whitelist[%s]", reqIP)
+	reqIP := c.ClientIP()
+	log.Debugf("reqIP>>>[%s]", reqIP)
+	if _, ok := ipWhiteList[reqIP]; ok {
+		log.Debugf("ip-whitelist")
 		c.Next()
 		return
 	}
