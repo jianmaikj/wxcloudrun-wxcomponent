@@ -1,13 +1,11 @@
 package wxcallback
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"time"
 
 	"github.com/WeixinCloud/wxcloudrun-wxcomponent/comm/errno"
-	"github.com/WeixinCloud/wxcloudrun-wxcomponent/comm/httputils"
 	"github.com/WeixinCloud/wxcloudrun-wxcomponent/comm/log"
 	"github.com/WeixinCloud/wxcloudrun-wxcomponent/comm/wx"
 
@@ -24,7 +22,7 @@ type wxCallbackComponentRecord struct {
 }
 
 func componentHandler(c *gin.Context) {
-	// add record
+	// 记录到数据库
 	body, _ := ioutil.ReadAll(c.Request.Body)
 	var json wxCallbackComponentRecord
 	if err := binding.JSON.BindBody(body, &json); err != nil {
@@ -45,6 +43,7 @@ func componentHandler(c *gin.Context) {
 		return
 	}
 
+	// 处理授权相关的消息
 	var err error
 	switch json.InfoType {
 	case "component_verify_ticket":
@@ -61,7 +60,18 @@ func componentHandler(c *gin.Context) {
 		c.JSON(http.StatusOK, errno.ErrSystemError.WithData(err.Error()))
 		return
 	}
-	c.String(http.StatusOK, "success")
+
+	// 转发到用户配置的地址
+	var proxyOpen bool
+	proxyOpen, err = proxyCallbackMsg(json.InfoType, "", "", string(body), c)
+	if err != nil {
+		log.Error(err)
+		c.JSON(http.StatusOK, errno.ErrSystemError.WithData(err.Error()))
+		return
+	}
+	if !proxyOpen {
+		c.String(http.StatusOK, "success")
+	}
 }
 
 type ticketRecord struct {
@@ -121,15 +131,15 @@ func newAuthHander(body *[]byte) error {
 }
 
 type queryAuthReq struct {
-	ComponentAppid    string `json:"component_appid"`
-	AuthorizationCode string `json:"authorization_code"`
+	ComponentAppid    string `wx:"component_appid"`
+	AuthorizationCode string `wx:"authorization_code"`
 }
 
 type authorizationInfo struct {
-	AuthorizerRefreshToken string `json:"authorizer_refresh_token"`
+	AuthorizerRefreshToken string `wx:"authorizer_refresh_token"`
 }
 type queryAuthResp struct {
-	AuthorizationInfo authorizationInfo `json:"authorization_info"`
+	AuthorizationInfo authorizationInfo `wx:"authorization_info"`
 }
 
 func queryAuth(authCode string) (string, error) {
@@ -137,12 +147,12 @@ func queryAuth(authCode string) (string, error) {
 		ComponentAppid:    wxbase.GetAppid(),
 		AuthorizationCode: authCode,
 	}
-	_, respbody, err := httputils.PostWxJson("/cgi-bin/component/api_query_auth", req, true)
+	var resp queryAuthResp
+	_, body, err := wx.PostWxJsonWithComponentToken("/cgi-bin/component/api_query_auth", "", req)
 	if err != nil {
 		return "", err
 	}
-	var resp queryAuthResp
-	if err := json.Unmarshal(respbody, &resp); err != nil {
+	if err := wx.WxJson.Unmarshal(body, &resp); err != nil {
 		log.Errorf("Unmarshal err, %v", err)
 		return "", err
 	}
